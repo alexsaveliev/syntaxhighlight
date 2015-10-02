@@ -2,6 +2,9 @@ package syntaxhighlight
 
 import (
 	"strconv"
+
+	"github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre"
+
 )
 
 type RegexpLexer struct {
@@ -28,21 +31,20 @@ func (self RegexpLexer) GetTokens(source []byte, stack ...[]string) []Token {
 		match := false
 		slice := source[pos:]
 		for _, rule := range rules {
-			index := rule.pattern.FindSubmatchIndex(slice)
-			if index == nil {
+			matcher := rule.pattern.Matcher(slice, pcre.ANCHORED)
+			if !matcher.Matches() {
 				continue
 			}
 			if rule.ttype != nil {
 				ret = append(ret, 
-					Token{Text: slice[0:index[1]], 
-						Offset: pos, 
+					Token{Text: matcher.Group(0), 
 						Type: rule.ttype})
 			} else {
-				tokens := rule.action(self, slice, pos, index)
+				tokens := rule.action(self, pos, matcher)
 				ret = append(ret, tokens...)
 			}
 			match = true
-			pos += index[1]
+			pos += len(matcher.Group(0))
 			statestack = updateStack(statestack[0:], rule)
 			break
 		}
