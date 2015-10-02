@@ -4,10 +4,16 @@ import (
 	"strconv"
 )
 
+// Lexer that uses mostly RE to produce tokens
 type RegexpLexer struct {
+	// map of rules to produce tokens in form state => []rule
 	Rules map[string][]RegexpRule
 }
 
+// Produces tokens using RE
+// source is a slice to produce tokens from
+// stack (optional) is initial lexer's state, if omited then 'root' is assumed
+// returns array of tokens found
 func (self RegexpLexer) GetTokens(source []byte, stack ...[]string) []Token {
 	pos := 0
 	var statestack []string
@@ -28,7 +34,7 @@ func (self RegexpLexer) GetTokens(source []byte, stack ...[]string) []Token {
 		match := false
 		slice := source[pos:]
 		for _, rule := range rules {
-			matcher := rule.pattern.FindSubmatch(slice)
+			matcher := rule.matcher(slice)
 			if matcher == nil {
 				continue
 			}
@@ -65,6 +71,12 @@ func (self RegexpLexer) GetTokens(source []byte, stack ...[]string) []Token {
 	return ret
 }
 
+// updates stack state using given rule
+// rule may define zero or more transitions to be applied, such as
+// - #pop - pops stack 
+// - #push - pushed head stack item on the top of stack 
+// - <N> (number) - leave only N items in stack
+// - <state> - put state to stack
 func updateStack(stack []string, rule RegexpRule) []string {
 	for _, state := range rule.states {
     	if state == `#pop` {
@@ -72,7 +84,7 @@ func updateStack(stack []string, rule RegexpRule) []string {
     	} else if state == `#push` {
     		stack = append(stack, stack[len(stack) - 1])
     	} else if i, err := strconv.Atoi(state); err == nil {
-    		stack = stack[:len(stack) - i]
+    		stack = stack[:i]
     	} else {
     		stack = append(stack, state)
     	}
