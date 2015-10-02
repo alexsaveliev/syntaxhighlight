@@ -5,7 +5,32 @@ import (
 	"regexp"
 )
 
-type RuleAction func(lexer Lexer, source []byte, start int, matches []int) []Token
+type FlagsRuleMaker struct {
+	flags string
+}
+
+func (self FlagsRuleMaker) Token(pattern string, ttype *TokenType, state ...string) RegexpRule {
+	return RegexpRule{pattern: self.makeRegexp(pattern), ttype: ttype, states: state}
+}
+
+func (self FlagsRuleMaker) Action(pattern string, action RuleAction, state ...string) RegexpRule {
+	return RegexpRule{pattern: self.makeRegexp(pattern), action: action, states: state}
+}
+
+func (self FlagsRuleMaker) makeRegexp(pattern string) *regexp.Regexp {
+	p := pattern
+	if self.flags != `` {
+		p = `(?` + self.flags + `)` + p
+	}
+	return regexp.MustCompile(`^` + p)
+}
+
+var (
+	MSI = FlagsRuleMaker{`msi`}
+)
+
+
+type RuleAction func(lexer Lexer, matches [][]byte) []Token
 
 type RegexpRule struct {
 	pattern *regexp.Regexp
@@ -14,36 +39,19 @@ type RegexpRule struct {
 	action RuleAction
 }
 
-func NewRule(pattern string, ttype *TokenType, state ...string) RegexpRule {
-	return RegexpRule{pattern: matcher(pattern), ttype: ttype, states: state}
-}
-
-func NewActionRule(pattern string, action RuleAction, state ...string) RegexpRule {
-	return RegexpRule{pattern: matcher(pattern), action: action, states: state}
-}
-
-func matcher(pattern string) *regexp.Regexp {
-	return regexp.MustCompile(`^(?msi)` + pattern)
-}
-
 func ByGroups(args ...interface{}) RuleAction {
-	return func(lexer Lexer, source []byte, start int, matches []int) []Token {
+	return func(lexer Lexer, matches [][]byte) []Token {
 		l := len(args)
 		ret := make([]Token, 0, l)
 		for i := 0; i < l; i++ {
 			var t Token
-			index := (i + 1) * 2
 			arg := args[i]
 			vf := reflect.ValueOf(arg)
   			ftype := vf.Type()
   			if ftype.Kind() == reflect.Func {
-  				tokens := arg.(RuleAction)(lexer, source[matches[index]:matches[index + 1]], 0, matches)
-  				for _, tok := range tokens {
-  					tok.Offset += start
-  					ret = append(ret, tok)
-  				}
+  				ret = append(ret, arg.(RuleAction)(lexer, [][]byte {matches[i + 1]})...)
   			} else {
-				t = Token{Text: source[matches[index]:matches[index + 1]], Offset: start + matches[index], Type: arg.(*TokenType)}		
+				t = Token{Text: matches[i + 1], Type: arg.(*TokenType)}		
 				ret = append(ret, t)
   			}
 		}
@@ -52,7 +60,7 @@ func ByGroups(args ...interface{}) RuleAction {
 }
 
 func UsingThis() RuleAction {
-	return func(lexer Lexer, source []byte, start int, matches []int) []Token {
-		return lexer.GetTokens(source)
+	return func(lexer Lexer, matches [][]byte) []Token {
+		return lexer.GetTokens(matches[0])
 	}
 }

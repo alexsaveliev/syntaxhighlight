@@ -28,21 +28,20 @@ func (self RegexpLexer) GetTokens(source []byte, stack ...[]string) []Token {
 		match := false
 		slice := source[pos:]
 		for _, rule := range rules {
-			index := rule.pattern.FindSubmatchIndex(slice)
-			if index == nil {
+			matcher := rule.pattern.FindSubmatch(slice)
+			if matcher == nil {
 				continue
 			}
 			if rule.ttype != nil {
 				ret = append(ret, 
-					Token{Text: slice[0:index[1]], 
-						Offset: pos, 
+					Token{Text: matcher[0], 
 						Type: rule.ttype})
 			} else {
-				tokens := rule.action(self, slice, pos, index)
+				tokens := rule.action(self, matcher)
 				ret = append(ret, tokens...)
 			}
 			match = true
-			pos += index[1]
+			pos += len(matcher[0])
 			statestack = updateStack(statestack[0:], rule)
 			break
 		}
@@ -52,14 +51,12 @@ func (self RegexpLexer) GetTokens(source []byte, stack ...[]string) []Token {
 				rules = self.Rules[`root`]
 				ret = append(ret, 
 					Token{Text: source[pos:pos+1], 
-						Offset: pos, 
 						Type: Text})
 				pos++
 				continue
 			}
    			ret = append(ret, 
    				Token{Text: source[pos:pos+1], 
-   					Offset: pos, 
    					Type: Error})
 			pos += 1
 		}
